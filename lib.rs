@@ -56,4 +56,64 @@ mod game_score {
         }
     }
 
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use ink::env::test;
+
+        #[ink::test]
+        fn test_new() {
+            let game_score = GameScore::new();
+            assert_eq!(game_score.get_ranking(), Vec::new());
+        }
+
+        #[ink::test]
+        fn test_update_score() {
+            let mut game_score = GameScore::new();
+            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+            game_score.update_score(100);
+            assert_eq!(game_score.get_score(), Some(100));
+
+            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            game_score.update_score(200);
+            assert_eq!(game_score.get_score(), Some(200));
+        }
+
+        #[ink::test]
+        fn test_ranking() {
+            let mut game_score = GameScore::new();
+            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+            game_score.update_score(100);
+
+            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            game_score.update_score(200);
+
+            test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
+            game_score.update_score(150);
+
+            let ranking = game_score.get_ranking();
+            assert_eq!(ranking.len(), 3);
+            assert_eq!(ranking[0], (accounts.bob, 200));
+            assert_eq!(ranking[1], (accounts.charlie, 150));
+            assert_eq!(ranking[2], (accounts.alice, 100));
+        }
+
+        #[ink::test]
+        fn test_update_existing_score() {
+            let mut game_score = GameScore::new();
+            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+            game_score.update_score(100);
+            game_score.update_score(150);
+
+            assert_eq!(game_score.get_score(), Some(150));
+            assert_eq!(game_score.get_ranking(), vec![(accounts.alice, 150)]);
+        }
+    }
+
 }

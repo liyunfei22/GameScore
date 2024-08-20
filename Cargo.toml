@@ -1,7 +1,7 @@
 [package]
 name = "GameScore"
 version = "0.1.0"
-authors = ["[your_name] <[your_email]>"]
+authors = ["[liyunfei] <[275983195@qq.com]>"]
 edition = "2021"
 
 [dependencies]
