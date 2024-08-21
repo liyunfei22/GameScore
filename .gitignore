@@ -1,5 +1,8 @@
 # Ignore build artifacts from the local tests sub-crate.
-/target/
+/target/cxxbridge/
+/target/debug/
+/target/ink/wasm32-unknown-unknown/
+/target/ink/release/
 
 # Ignore backup files creates by cargo fmt.
 **/*.rs.bk
