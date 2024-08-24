@@ -1,10 +1,10 @@
 {
   "source": {
-    "hash": "0xd51528d07777531bfe03bb3daf643dc9d554664e7dadbae00affb0ead354738a",
+    "hash": "0x625822355fc0ec7ba7965f2695821a2ef3bf8bd6e9bf6673a39a0d5d1c264dde",
     "language": "ink! 5.0.0",
     "compiler": "rustc 1.80.1",
     "build_info": {
-      "build_mode": "Debug",
+      "build_mode": "Release",
       "cargo_contract_version": "4.1.1",
       "rust_toolchain": "stable-x86_64-apple-darwin",
       "wasm_opt_settings": {
@@ -17,7 +17,7 @@
     "name": "GameScore",
     "version": "0.1.0",
     "authors": [
-      "[your_name] <[your_email]>"
+      "[liyunfei] <[275983195@qq.com]>"
     ]
   },
   "image": null,
@@ -45,7 +45,7 @@
         "displayName": [
           "AccountId"
         ],
-        "type": 2
+        "type": 0
       },
       "balance": {
         "displayName": [
@@ -57,7 +57,7 @@
         "displayName": [
           "BlockNumber"
         ],
-        "type": 0
+        "type": 3
       },
       "chainExtension": {
         "displayName": [
@@ -92,12 +92,21 @@
       {
         "args": [
           {
+            "label": "player",
+            "type": {
+              "displayName": [
+                "AccountId"
+              ],
+              "type": 0
+            }
+          },
+          {
             "label": "new_score",
             "type": {
               "displayName": [
                 "u32"
               ],
-              "type": 0
+              "type": 3
             }
           }
         ],
@@ -156,15 +165,24 @@
           "fields": [
             {
               "layout": {
+                "leaf": {
+                  "key": "0x00000000",
+                  "ty": 0
+                }
+              },
+              "name": "owner"
+            },
+            {
+              "layout": {
                 "root": {
                   "layout": {
                     "leaf": {
                       "key": "0xb45287d2",
-                      "ty": 0
+                      "ty": 3
                     }
                   },
                   "root_key": "0xb45287d2",
-                  "ty": 1
+                  "ty": 4
                 }
               },
               "name": "score"
@@ -191,46 +209,10 @@
       "id": 0,
       "type": {
         "def": {
-          "primitive": "u32"
-        }
-      }
-    },
-    {
-      "id": 1,
-      "type": {
-        "def": {
-          "composite": {}
-        },
-        "params": [
-          {
-            "name": "K",
-            "type": 2
-          },
-          {
-            "name": "V",
-            "type": 0
-          },
-          {
-            "name": "KeyType",
-            "type": 5
-          }
-        ],
-        "path": [
-          "ink_storage",
-          "lazy",
-          "mapping",
-          "Mapping"
-        ]
-      }
-    },
-    {
-      "id": 2,
-      "type": {
-        "def": {
           "composite": {
             "fields": [
               {
-                "type": 3,
+                "type": 1,
                 "typeName": "[u8; 32]"
               }
             ]
@@ -244,13 +226,29 @@
       }
     },
     {
-      "id": 3,
+      "id": 1,
       "type": {
         "def": {
           "array": {
             "len": 32,
-            "type": 4
+            "type": 2
           }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": {
+        "def": {
+          "primitive": "u8"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": {
+        "def": {
+          "primitive": "u32"
         }
       }
     },
@@ -258,8 +256,28 @@
       "id": 4,
       "type": {
         "def": {
-          "primitive": "u8"
-        }
+          "composite": {}
+        },
+        "params": [
+          {
+            "name": "K",
+            "type": 0
+          },
+          {
+            "name": "V",
+            "type": 3
+          },
+          {
+            "name": "KeyType",
+            "type": 5
+          }
+        ],
+        "path": [
+          "ink_storage",
+          "lazy",
+          "mapping",
+          "Mapping"
+        ]
       }
     },
     {
@@ -330,7 +348,7 @@
       "type": {
         "def": {
           "sequence": {
-            "type": 2
+            "type": 0
           }
         }
       }
@@ -342,8 +360,13 @@
           "composite": {
             "fields": [
               {
+                "name": "owner",
+                "type": 0,
+                "typeName": "<AccountId as::ink::storage::traits::AutoStorableHint<::ink::\nstorage::traits::ManualKey<130024650u32, ()>,>>::Type"
+              },
+              {
                 "name": "score",
-                "type": 1,
+                "type": 4,
                 "typeName": "<ink::storage::Mapping<AccountId, u32> as::ink::storage::traits\n::AutoStorableHint<::ink::storage::traits::ManualKey<\n3532083892u32, ()>,>>::Type"
               },
               {
@@ -477,7 +500,7 @@
               {
                 "fields": [
                   {
-                    "type": 0
+                    "type": 3
                   }
                 ],
                 "index": 1,
@@ -489,7 +512,7 @@
         "params": [
           {
             "name": "T",
-            "type": 0
+            "type": 3
           }
         ],
         "path": [
@@ -554,8 +577,8 @@
       "type": {
         "def": {
           "tuple": [
-            2,
-            0
+            0,
+            3
           ]
         }
       }
@@ -575,7 +598,7 @@
           "composite": {
             "fields": [
               {
-                "type": 3,
+                "type": 1,
                 "typeName": "[u8; 32]"
               }
             ]

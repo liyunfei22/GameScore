@@ -5,7 +5,6 @@ mod game_score {
     use ink::prelude::vec::Vec;
     use ink::storage::Mapping;
 
- 
     #[ink(storage)]
     pub struct GameScore {
         owner: AccountId,
@@ -19,14 +18,43 @@ mod game_score {
             let score = Mapping::default();
             let ranking = Vec::default();
             let owner = Self::env().caller();
-
             Self {
                 owner,
                 score,
                 ranking
-             }
+            }
         }
 
+        #[ink(message)]
+        pub fn update_score(&mut self, player: AccountId, new_score: u32) -> Result<(), Error> {
+            self.ensure_owner()?;
+            self.score.insert(player, &new_score);
+            self.update_ranking(player, new_score);
+            Ok(())
+        }
+
+        fn update_ranking(&mut self, player: AccountId, score: u32) {
+            self.ranking.retain(|&p| p != player);
+    
+            let pos = self.ranking.iter()
+                                   .position(|&p| self.score.get(&p).unwrap_or(0) < score)
+                                   .unwrap_or(self.ranking.len());
+            self.ranking.insert(pos, player);
+        }
+
+        #[ink(message)]
+        pub fn get_score(&self, player: AccountId) -> Result<Option<u32>, Error> {
+            self.ensure_owner()?;
+            Ok(self.score.get(player))
+        }
+
+        #[ink(message)]
+        pub fn get_ranking(&self) -> Result<Vec<(AccountId, u32)>, Error> {
+            self.ensure_owner()?;
+            Ok(self.ranking.iter()
+                        .map(|&player| (player, self.score.get(&player).unwrap_or(0)))
+                        .collect())
+        }
 
         fn ensure_owner(&self) -> Result<(), Error> {
             if self.env().caller() == self.owner {
@@ -35,42 +63,10 @@ mod game_score {
                 Err(Error::NotOwner)
             }
         }
-
-
-        #[ink(message)]
-        pub fn update_score(&mut self, player: AccountId, new_score: u32) {
-            self.ensure_owner();
-            self.score.insert(player, &new_score);
-            self.update_ranking(player, new_score);
-        }
-
-        fn update_ranking(&mut self, player: AccountId, score: u32) {
-            // 移除玩家在排行榜中的旧位置
-            self.ranking.retain(|&p| p != player);
-    
-            // 查找玩家的新位置并插入玩家
-            let pos = self.ranking.iter()
-                                   .position(|&p| self.score.get(&p).unwrap_or(0) < score)
-                                   .unwrap_or(self.ranking.len());
-            self.ranking.insert(pos, player);
-        }
-
-        #[ink(message)]
-        pub fn get_score(&self, player: AccountId) -> Option<u32> {
-            self.ensure_owner();
-            self.score.get(player)
-        }
-
-        #[ink(message)]
-        pub fn get_ranking(&self) -> Vec<(AccountId, u32)> {
-            self.ranking.iter()
-                        .map(|&player| (player, self.score.get(&player).unwrap_or(0)))
-                        .collect()
-        }
     }
 
-    #[derive(Debug, PartialEq, Eq)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub enum Error {
         NotOwner,
     }
@@ -83,7 +79,7 @@ mod game_score {
         #[ink::test]
         fn test_new() {
             let game_score = GameScore::new();
-            assert_eq!(game_score.get_ranking(), Vec::new());
+            assert_eq!(game_score.get_ranking().unwrap(), Vec::new());
         }
 
         #[ink::test]
@@ -91,13 +87,11 @@ mod game_score {
             let mut game_score = GameScore::new();
             let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
 
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
-            game_score.update_score(100);
-            assert_eq!(game_score.get_score(), Some(100));
+            assert_eq!(game_score.update_score(accounts.alice, 100), Ok(()));
+            assert_eq!(game_score.get_score(accounts.alice), Ok(Some(100)));
 
             test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            game_score.update_score(200);
-            assert_eq!(game_score.get_score(), Some(200));
+            assert_eq!(game_score.update_score(accounts.bob, 200), Err(Error::NotOwner));
         }
 
         #[ink::test]
@@ -105,16 +99,11 @@ mod game_score {
             let mut game_score = GameScore::new();
             let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
 
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
-            game_score.update_score(100);
+            assert_eq!(game_score.update_score(accounts.alice, 100), Ok(()));
+            assert_eq!(game_score.update_score(accounts.bob, 200), Ok(()));
+            assert_eq!(game_score.update_score(accounts.charlie, 150), Ok(()));
 
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            game_score.update_score(200);
-
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
-            game_score.update_score(150);
-
-            let ranking = game_score.get_ranking();
+            let ranking = game_score.get_ranking().unwrap();
             assert_eq!(ranking.len(), 3);
             assert_eq!(ranking[0], (accounts.bob, 200));
             assert_eq!(ranking[1], (accounts.charlie, 150));
@@ -126,13 +115,27 @@ mod game_score {
             let mut game_score = GameScore::new();
             let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
 
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
-            game_score.update_score(100);
-            game_score.update_score(150);
+            assert_eq!(game_score.update_score(accounts.alice, 100), Ok(()));
+            assert_eq!(game_score.update_score(accounts.alice, 150), Ok(()));
 
-            assert_eq!(game_score.get_score(), Some(150));
-            assert_eq!(game_score.get_ranking(), vec![(accounts.alice, 150)]);
+            assert_eq!(game_score.get_score(accounts.alice), Ok(Some(150)));
+            assert_eq!(game_score.get_ranking().unwrap(), vec![(accounts.alice, 150)]);
+        }
+
+        #[ink::test]
+        fn test_permissions() {
+            let mut game_score = GameScore::new();
+            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            // 非所有者不能更新分数
+            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            assert_eq!(game_score.update_score(accounts.alice, 100), Err(Error::NotOwner));
+
+            // 非所有者不能获取分数
+            assert_eq!(game_score.get_score(accounts.alice), Err(Error::NotOwner));
+
+            // 非所有者不能获取排名
+            assert_eq!(game_score.get_ranking(), Err(Error::NotOwner));
         }
     }
-
 }
