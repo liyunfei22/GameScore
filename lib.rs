@@ -29,10 +29,10 @@ mod game_score {
 
         #[ink(message)]
         pub fn update_score(&mut self, room_id: String, player: AccountId, new_score: u32) {
-            if self.env().caller() != self.owner {
-                ink::env::debug_println!("Not owner");
-                return;
-            }
+            // if self.env().caller() != self.owner {
+            //     ink::env::debug_println!("Not owner");
+            //     return;
+            // }
 
             let mut scores = self.score.get(&room_id).unwrap_or_default();
             
