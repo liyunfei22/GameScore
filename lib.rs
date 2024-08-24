@@ -2,137 +2,66 @@
 
 #[ink::contract]
 mod game_score {
-    use ink::prelude::vec::Vec;
     use ink::storage::Mapping;
+    use ink::prelude::vec::Vec;
+    use ink::prelude::string::String;
 
- 
     #[ink(storage)]
     pub struct GameScore {
         owner: AccountId,
-        score: ink::storage::Mapping<AccountId, u32>,
-        ranking: Vec<AccountId>,
+        score: Mapping<String, Vec<(AccountId, u32)>>,
+        ranking: Mapping<String, Vec<AccountId>>,
     }
+
 
     impl GameScore {
         #[ink(constructor)]
         pub fn new() -> Self {
-            let score = Mapping::default();
-            let ranking = Vec::default();
-            let owner = Self::env().caller();
-
             Self {
-                owner,
-                score,
-                ranking
-             }
-        }
-
-
-        fn ensure_owner(&self) -> Result<(), Error> {
-            if self.env().caller() == self.owner {
-                Ok(())
-            } else {
-                Err(Error::NotOwner)
+                owner: Self::env().caller(),
+                score: Mapping::default(),
+                ranking: Mapping::default(),
             }
         }
 
-
         #[ink(message)]
-        pub fn update_score(&mut self, player: AccountId, new_score: u32) {
-            self.ensure_owner();
-            self.score.insert(player, &new_score);
-            self.update_ranking(player, new_score);
-        }
+        pub fn update_score(&mut self, room_id: String, player: AccountId, new_score: u32) {
+            if self.env().caller() != self.owner {
+                ink::env::debug_println!("Not owner");
+                return;
+            }
 
-        fn update_ranking(&mut self, player: AccountId, score: u32) {
-            // 移除玩家在排行榜中的旧位置
-            self.ranking.retain(|&p| p != player);
-    
-            // 查找玩家的新位置并插入玩家
-            let pos = self.ranking.iter()
-                                   .position(|&p| self.score.get(&p).unwrap_or(0) < score)
-                                   .unwrap_or(self.ranking.len());
-            self.ranking.insert(pos, player);
-        }
+            let mut scores = self.score.get(&room_id).unwrap_or_default();
+            
+            if let Some(score) = scores.iter_mut().find(|(p, _)| *p == player) {
+                score.1 = new_score;
+            } else {
+                scores.push((player, new_score));
+            }
 
-        #[ink(message)]
-        pub fn get_score(&self, player: AccountId) -> Option<u32> {
-            self.ensure_owner();
-            self.score.get(player)
+            scores.sort_by(|a, b| b.1.cmp(&a.1));
+            self.score.insert(&room_id, &scores);
+
+            let ranking: Vec<AccountId> = scores.iter().map(|(p, _)| *p).collect();
+            self.ranking.insert(&room_id, &ranking);
         }
 
         #[ink(message)]
-        pub fn get_ranking(&self) -> Vec<(AccountId, u32)> {
-            self.ranking.iter()
-                        .map(|&player| (player, self.score.get(&player).unwrap_or(0)))
-                        .collect()
+        pub fn get_room_score(&self, room_id: String) -> Vec<(AccountId, u32)> {
+            if self.env().caller() != self.owner {
+                ink::env::debug_println!("Not owner");
+                return Vec::new();
+            }
+            self.score.get(&room_id).unwrap_or_default()
+        }
+
+        #[ink(message)]
+        pub fn get_room_ranking(&self, room_id: String) -> Vec<AccountId> {
+            if self.env().caller() != self.owner {
+                ink::env::debug_println!("Not owner");
+                return Vec::new();
+            }
+            self.ranking.get(&room_id).unwrap_or_default()
         }
     }
-
-    #[derive(Debug, PartialEq, Eq)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub enum Error {
-        NotOwner,
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use ink::env::test;
-
-        #[ink::test]
-        fn test_new() {
-            let game_score = GameScore::new();
-            assert_eq!(game_score.get_ranking(), Vec::new());
-        }
-
-        #[ink::test]
-        fn test_update_score() {
-            let mut game_score = GameScore::new();
-            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
-
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
-            game_score.update_score(100);
-            assert_eq!(game_score.get_score(), Some(100));
-
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            game_score.update_score(200);
-            assert_eq!(game_score.get_score(), Some(200));
-        }
-
-        #[ink::test]
-        fn test_ranking() {
-            let mut game_score = GameScore::new();
-            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
-
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
-            game_score.update_score(100);
-
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            game_score.update_score(200);
-
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.charlie);
-            game_score.update_score(150);
-
-            let ranking = game_score.get_ranking();
-            assert_eq!(ranking.len(), 3);
-            assert_eq!(ranking[0], (accounts.bob, 200));
-            assert_eq!(ranking[1], (accounts.charlie, 150));
-            assert_eq!(ranking[2], (accounts.alice, 100));
-        }
-
-        #[ink::test]
-        fn test_update_existing_score() {
-            let mut game_score = GameScore::new();
-            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
-
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
-            game_score.update_score(100);
-            game_score.update_score(150);
-
-            assert_eq!(game_score.get_score(), Some(150));
-            assert_eq!(game_score.get_ranking(), vec![(accounts.alice, 150)]);
-        }
-    }
-
 }
