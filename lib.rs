@@ -102,6 +102,7 @@ mod game_score {
                 // 计算除最后一名玩家外的所有押金总和
                 deposits[0..last_index].iter().map(|(_, stake)| stake).sum()
             };
+            assert!(total_stake <= self.env().balance(), "insufficient funds!");
 
             // 转账奖励给胜者
             if self.env().transfer(winner, total_stake).is_err() {
