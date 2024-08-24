@@ -1,141 +1,147 @@
-#![cfg_attr(not(feature = "std"), no_std, no_main)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+use ink::prelude::vec::Vec;
+use ink::storage::Mapping;
+use ink::env::Error as EnvError;
 
 #[ink::contract]
-mod game_score {
-    use ink::prelude::vec::Vec;
-    use ink::storage::Mapping;
+mod kart_game {
+    use super::*;
 
     #[ink(storage)]
-    pub struct GameScore {
+    pub struct KartGame {
         owner: AccountId,
-        score: ink::storage::Mapping<AccountId, u32>,
-        ranking: Vec<AccountId>,
+        token_contract: AccountId,
+        game_pool: u128,
+        players: Vec<AccountId>,
+        game_active: bool,
     }
 
-    impl GameScore {
-        #[ink(constructor)]
-        pub fn new() -> Self {
-            let score = Mapping::default();
-            let ranking = Vec::default();
-            let owner = Self::env().caller();
-            Self {
-                owner,
-                score,
-                ranking
-            }
-        }
+    #[ink(event)]
+    pub struct PlayerJoined {
+        #[ink(topic)]
+        player: AccountId,
+        #[ink(topic)]
+        amount: u128,
+    }
 
-        #[ink(message)]
-        pub fn update_score(&mut self, player: AccountId, new_score: u32) -> Result<(), Error> {
-            self.ensure_owner()?;
-            self.score.insert(player, &new_score);
-            self.update_ranking(player, new_score);
-            Ok(())
-        }
+    #[ink(event)]
+    pub struct GameStarted {
+        #[ink(topic)]
+        players: Vec<AccountId>,
+    }
 
-        fn update_ranking(&mut self, player: AccountId, score: u32) {
-            self.ranking.retain(|&p| p != player);
-    
-            let pos = self.ranking.iter()
-                                   .position(|&p| self.score.get(&p).unwrap_or(0) < score)
-                                   .unwrap_or(self.ranking.len());
-            self.ranking.insert(pos, player);
-        }
-
-        #[ink(message)]
-        pub fn get_score(&self, player: AccountId) -> Result<Option<u32>, Error> {
-            self.ensure_owner()?;
-            Ok(self.score.get(player))
-        }
-
-        #[ink(message)]
-        pub fn get_ranking(&self) -> Result<Vec<(AccountId, u32)>, Error> {
-            self.ensure_owner()?;
-            Ok(self.ranking.iter()
-                        .map(|&player| (player, self.score.get(&player).unwrap_or(0)))
-                        .collect())
-        }
-
-        fn ensure_owner(&self) -> Result<(), Error> {
-            if self.env().caller() == self.owner {
-                Ok(())
-            } else {
-                Err(Error::NotOwner)
-            }
-        }
+    #[ink(event)]
+    pub struct GameEnded {
+        #[ink(topic)]
+        winner: AccountId,
+        #[ink(topic)]
+        reward: u128,
     }
 
     #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub enum Error {
         NotOwner,
+        GameAlreadyActive,
+        GameNotActive,
+        TransferFailed,
+        InsufficientBalance,
+        PlayerAlreadyJoined,
     }
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use ink::env::test;
+    pub type Result<T> = core::result::Result<T, Error>;
 
-        #[ink::test]
-        fn test_new() {
-            let game_score = GameScore::new();
-            assert_eq!(game_score.get_ranking().unwrap(), Vec::new());
+    impl KartGame {
+        /// 构造函数，初始化游戏合约
+        #[ink(constructor)]
+        pub fn new(token_contract: AccountId) -> Self {
+            Self {
+                owner: Self::env().caller(),
+                token_contract,
+                game_pool: 0,
+                players: Vec::new(),
+                game_active: false,
+            }
         }
 
-        #[ink::test]
-        fn test_update_score() {
-            let mut game_score = GameScore::new();
-            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+        /// 玩家加入游戏，缴纳token
+        #[ink(message, payable)]
+        pub fn join_game(&mut self) -> Result<()> {
+            let caller = self.env().caller();
+            let amount = self.env().transferred_value();
 
-            assert_eq!(game_score.update_score(accounts.alice, 100), Ok(()));
-            assert_eq!(game_score.get_score(accounts.alice), Ok(Some(100)));
+            // 确保游戏没有在进行中
+            if self.game_active {
+                return Err(Error::GameAlreadyActive);
+            }
 
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            assert_eq!(game_score.update_score(accounts.bob, 200), Err(Error::NotOwner));
+            // 确保玩家没有已经加入
+            if self.players.contains(&caller) {
+                return Err(Error::PlayerAlreadyJoined);
+            }
+
+            // 转账token到合约
+            self.env().transfer(self.env().account_id(), amount).map_err(|_| Error::TransferFailed)?;
+
+            // 增加奖池
+            self.game_pool += amount;
+            self.players.push(caller);
+
+            self.env().emit_event(PlayerJoined { player: caller, amount });
+
+            Ok(())
         }
 
-        #[ink::test]
-        fn test_ranking() {
-            let mut game_score = GameScore::new();
-            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+        /// 开始游戏，锁定玩家列表
+        #[ink(message)]
+        pub fn start_game(&mut self) -> Result<()> {
+            self.ensure_owner()?;
 
-            assert_eq!(game_score.update_score(accounts.alice, 100), Ok(()));
-            assert_eq!(game_score.update_score(accounts.bob, 200), Ok(()));
-            assert_eq!(game_score.update_score(accounts.charlie, 150), Ok(()));
+            if self.game_active {
+                return Err(Error::GameAlreadyActive);
+            }
 
-            let ranking = game_score.get_ranking().unwrap();
-            assert_eq!(ranking.len(), 3);
-            assert_eq!(ranking[0], (accounts.bob, 200));
-            assert_eq!(ranking[1], (accounts.charlie, 150));
-            assert_eq!(ranking[2], (accounts.alice, 100));
+            self.game_active = true;
+
+            self.env().emit_event(GameStarted { players: self.players.clone() });
+
+            Ok(())
         }
 
-        #[ink::test]
-        fn test_update_existing_score() {
-            let mut game_score = GameScore::new();
-            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+        /// 结束游戏，分发奖励
+        #[ink(message)]
+        pub fn end_game(&mut self, winner: AccountId) -> Result<()> {
+            self.ensure_owner()?;
 
-            assert_eq!(game_score.update_score(accounts.alice, 100), Ok(()));
-            assert_eq!(game_score.update_score(accounts.alice, 150), Ok(()));
+            if !self.game_active {
+                return Err(Error::GameNotActive);
+            }
 
-            assert_eq!(game_score.get_score(accounts.alice), Ok(Some(150)));
-            assert_eq!(game_score.get_ranking().unwrap(), vec![(accounts.alice, 150)]);
+            let reward = self.game_pool * 80 / 100; // 80%给胜者
+            let contract_share = self.game_pool - reward; // 20%给合约
+
+            // 转账奖励给胜者
+            self.env().transfer(winner, reward).map_err(|_| Error::TransferFailed)?;
+
+            // 更新合约余额
+            self.game_pool = contract_share;
+
+            // 清空玩家列表并重置游戏状态
+            self.players.clear();
+            self.game_active = false;
+
+            self.env().emit_event(GameEnded { winner, reward });
+
+            Ok(())
         }
 
-        #[ink::test]
-        fn test_permissions() {
-            let mut game_score = GameScore::new();
-            let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
-
-            // 非所有者不能更新分数
-            test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            assert_eq!(game_score.update_score(accounts.alice, 100), Err(Error::NotOwner));
-
-            // 非所有者不能获取分数
-            assert_eq!(game_score.get_score(accounts.alice), Err(Error::NotOwner));
-
-            // 非所有者不能获取排名
-            assert_eq!(game_score.get_ranking(), Err(Error::NotOwner));
+        /// 确保调用者是合约的所有者
+        fn ensure_owner(&self) -> Result<()> {
+            if self.env().caller() != self.owner {
+                return Err(Error::NotOwner);
+            }
+            Ok(())
         }
     }
 }
