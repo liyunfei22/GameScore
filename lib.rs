@@ -55,7 +55,7 @@ mod game_score {
             let stake = self.env().transferred_value();
 
 
-            if stake < 10 {
+            if stake < 1 {
                 ink::env::debug_println!("InsufficientStake");
                 return;
             }
