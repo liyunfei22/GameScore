@@ -88,10 +88,10 @@ mod game_score {
 
         #[ink(message)]
         pub fn end_game(&mut self, room_id: String, winner: AccountId) {
-            if self.env().caller() != self.owner {
-                ink::env::debug_println!("Not owner");
-                return;
-            }
+            // if self.env().caller() != self.owner {
+            //     ink::env::debug_println!("Not owner");
+            //     return;
+            // }
     
             let deposits = self.deposit.get(&room_id).unwrap_or_else(|| Vec::new());
 
@@ -120,19 +120,19 @@ mod game_score {
 
         #[ink(message)]
         pub fn get_room_score(&self, room_id: String) -> Vec<(AccountId, u32)> {
-            if self.env().caller() != self.owner {
-                ink::env::debug_println!("Not owner");
-                return Vec::new();
-            }
+            // if self.env().caller() != self.owner {
+            //     ink::env::debug_println!("Not owner");
+            //     return Vec::new();
+            // }
             self.score.get(&room_id).unwrap_or_default()
         }
 
         #[ink(message)]
         pub fn get_room_ranking(&self, room_id: String) -> Vec<AccountId> {
-            if self.env().caller() != self.owner {
-                ink::env::debug_println!("Not owner");
-                return Vec::new();
-            }
+            // if self.env().caller() != self.owner {
+            //     ink::env::debug_println!("Not owner");
+            //     return Vec::new();
+            // }
             self.ranking.get(&room_id).unwrap_or_default()
         }
 
